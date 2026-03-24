@@ -9,10 +9,10 @@ import java.util.ArrayList;
 
 public class MotorPHPayrollSystem {
 
-    // these are the start and end times for work - 8:00 AM to 5:00 PM only
+    // work starts at 8:00 AM and ends at 5:00 PM
     static final LocalTime WORK_START = LocalTime.of(8, 0);
     static final LocalTime WORK_END = LocalTime.of(17, 0);
-    static final double BREAK_HOURS = 1.0; // we always subtract 1 hour for lunch break
+    static final double BREAK_HOURS = 1.0; // always subtract 1 hour for lunch break
 
     // these arrays will hold the employee info from the CSV file
     static int[] empNumbers;
@@ -58,8 +58,8 @@ public class MotorPHPayrollSystem {
             while ((line = br.readLine()) != null) {
                 if (firstLine) {
                     firstLine = false;
-                    continue;
-                } // skip the first row because it's just the column headers
+                    continue; // skip the first row because it's just the column headers
+                }
                 if (!line.trim().isEmpty()) {
                     count++;
                 }
@@ -90,7 +90,7 @@ public class MotorPHPayrollSystem {
                 if (firstLine) {
                     firstLine = false;
                     continue;
-                } // skip the header row again
+                }
                 if (line.trim().isEmpty()) {
                     continue;
                 }
@@ -104,8 +104,7 @@ public class MotorPHPayrollSystem {
                 empFirstNames[idx] = data[2].trim().replaceAll("\\s+", " ");
                 empBirthdays[idx] = data[3].trim();
 
-                // columns 13 to 16 are the salary and allowances, column 18 is the hourly rate
-                // some values have commas like "90,000" so we use parseFormattedDouble to handle that
+                // used parseFormattedDouble because some values have commas inside them
                 empBasicSalary[idx] = parseFormattedDouble(data[13]);
                 empRiceSubsidy[idx] = parseFormattedDouble(data[14]);
                 empPhoneAllowance[idx] = parseFormattedDouble(data[15]);
@@ -133,14 +132,14 @@ public class MotorPHPayrollSystem {
             while ((line = br.readLine()) != null) {
                 if (firstLine) {
                     firstLine = false;
-                    continue;
-                } // skip the header row
+                    continue; // skip the header row
+                }
                 if (line.trim().isEmpty()) {
                     continue;
                 }
                 String[] data = splitCSVLine(line);
                 LocalDate date = LocalDate.parse(data[3].trim(), DateTimeFormatter.ofPattern("MM/dd/yyyy"));
-                // we only want rows from June (month 6) up to December (month 12) of 2024
+                // only count this row if it's in 2024 and the month is June (6) or later
                 if (date.getYear() == 2024 && date.getMonthValue() >= 6) {
                     count++;
                 }
@@ -165,18 +164,17 @@ public class MotorPHPayrollSystem {
             while ((line = br.readLine()) != null) {
                 if (firstLine) {
                     firstLine = false;
-                    continue;
-                } // skip the header row
+                    continue; // skip the header row
+                }
                 if (line.trim().isEmpty()) {
                     continue;
                 }
 
-                // split the line into separate values
                 String[] data = splitCSVLine(line);
 
                 LocalDate date = LocalDate.parse(data[3].trim(), DateTimeFormatter.ofPattern("MM/dd/yyyy"));
 
-                // if the row is not from June to December 2024, we skip it
+                // skip rows that are not from June to December 2024
                 if (date.getYear() != 2024 || date.getMonthValue() < 6) {
                     continue;
                 }
@@ -185,60 +183,48 @@ public class MotorPHPayrollSystem {
                 attEmpNumbers[idx] = Integer.parseInt(data[0].trim());
                 attDates[idx] = date;
 
-                // save the log in and log out times
+                // parse the time using H:mm format because some times are like 8:05 (single digit hour)
                 attTimeIn[idx] = LocalTime.parse(data[4].trim(), DateTimeFormatter.ofPattern("H:mm"));
                 attTimeOut[idx] = LocalTime.parse(data[5].trim(), DateTimeFormatter.ofPattern("H:mm"));
 
                 idx++;
             }
-            attCount = idx; // save how many attendance rows we read
+            attCount = idx; // save the final count
 
         } catch (IOException e) {
             System.out.println("Error reading attendance records: " + e.getMessage());
         }
     }
 
-    // this method figures out how many hours an employee worked in one day
-    // we only count time between 8:00 AM and 5:00 PM, then we subtract 1 hour for lunch
-    // example: log in 8:30, log out 5:30 = 8.5 hours - 1 break = 7.5 hours
-    // example: log in 8:05, log out 5:00 = we treat 8:05 as 8:00 (grace period) = 9 - 1 = 8 hours
+    // this method computes how many hours one employee worked on a single day
     static double computeHoursWorked(LocalTime logIn, LocalTime logOut) {
 
-        // if the employee logged in between 8:00 and 8:10, we treat it as exactly 8:00
-        // this is the grace period so they don't get penalized for being a few minutes late
+        // if login is at or before 8:05, treat as 8:00 (grace period)
+        // otherwise use actual login time
         LocalTime effectiveIn = logIn;
-        if (!logIn.isBefore(WORK_START) && !logIn.isAfter(LocalTime.of(8, 10))) {
-            effectiveIn = WORK_START; // count from 8:00 AM instead
-        } else if (logIn.isBefore(WORK_START)) {
-            effectiveIn = WORK_START; // if they came early we still start counting from 8:00 AM
+        if (!logIn.isAfter(LocalTime.of(8, 5))) {
+            effectiveIn = WORK_START;
         }
-        // if the log in time is after 8:10, we use their actual log in time
 
-        // if the employee logged out after 5:00 PM we only count up to 5:00 PM (no overtime)
+        // cap logout to 17:00 if later
         LocalTime effectiveOut = logOut.isAfter(WORK_END) ? WORK_END : logOut;
 
-        // if the log out is before the log in for some reason, return 0
+        // if effectiveOut is before or equal to effectiveIn, return 0
         if (!effectiveOut.isAfter(effectiveIn)) {
             return 0;
         }
 
-        // calculate how many minutes they worked
+        // compute duration in minutes then convert to hours minus lunch break
         long minutesWorked = java.time.Duration.between(effectiveIn, effectiveOut).toMinutes();
-
-        // convert minutes to hours and subtract the 1 hour lunch break
         double hoursWorked = (minutesWorked / 60.0) - BREAK_HOURS;
 
-        // if the result is somehow negative, just return 0
         return hoursWorked < 0 ? 0 : hoursWorked;
     }
 
-    // this method adds up all the hours an employee worked between two dates
-    // we use this to get the total hours for the 1st cutoff (days 1-15) and 2nd cutoff (days 16-end)
+    // this method adds up all the hours worked by one employee within a date range
     static double getTotalHoursForPeriod(int empNumber, LocalDate startDate, LocalDate endDate) {
         double totalHours = 0;
         for (int i = 0; i < attCount; i++) {
-            // check if this row belongs to the employee we are looking for
-            // and if the date falls between the start and end dates
             if (attEmpNumbers[i] == empNumber
                     && !attDates[i].isBefore(startDate)
                     && !attDates[i].isAfter(endDate)) {
@@ -248,12 +234,10 @@ public class MotorPHPayrollSystem {
         return totalHours;
     }
 
-    // this method computes how much SSS the employee needs to pay for the month
-    // SSS uses a bracket system - the higher the salary, the higher the contribution
+    // this method looks up the SSS contribution based on the employee's monthly basic salary
     static double computeSSS(double monthlySalary) {
         double sssMonthly;
 
-        // we check which bracket the salary falls into and assign the right contribution amount
         if (monthlySalary < 3250) {
             sssMonthly = 135.00;
         } else if (monthlySalary < 3750) {
@@ -343,60 +327,62 @@ public class MotorPHPayrollSystem {
         } else if (monthlySalary < 24750) {
             sssMonthly = 1102.50;
         } else {
-            sssMonthly = 1125.00;
+            sssMonthly = 1125.00; // maximum SSS contribution
         }
 
         return sssMonthly;
     }
 
-    // this method computes the PhilHealth deduction
-    // it is just 3% of the monthly gross salary
-    static double computePhilHealth(double monthlyGrossSalary) {
-        return monthlyGrossSalary * 0.03;
-    }
+    // this method computes the PhilHealth deduction for the employee
+    static double computePhilHealth(double monthlyBasicSalary) {
+        double totalPremium;
 
-    // this method computes the Pag-IBIG deduction
-    // it is 2% of the monthly gross salary but the maximum amount is only PHP 200
-    static double computePagIbig(double monthlyGrossSalary) {
-        double monthly = monthlyGrossSalary * 0.02;
-        if (monthly > 200) {
-            monthly = 200; // if it goes over 200, we cap it at 200
-
-        }
-        return monthly;
-    }
-
-    // this method computes the income tax using the BIR semi-monthly tax table
-    // the higher the taxable income, the higher the tax rate
-    static double computeIncomeTax(double semiMonthlyTaxableIncome) {
-        double tax;
-
-        // we check which tax bracket the income falls into
-        if (semiMonthlyTaxableIncome <= 10417) {
-            tax = 0; // no tax if income is low enough
-        } else if (semiMonthlyTaxableIncome <= 16667) {
-            tax = (semiMonthlyTaxableIncome - 10417) * 0.20;
-        } else if (semiMonthlyTaxableIncome <= 33333) {
-            tax = 1250 + (semiMonthlyTaxableIncome - 16667) * 0.25;
-        } else if (semiMonthlyTaxableIncome <= 83333) {
-            tax = 5416.67 + (semiMonthlyTaxableIncome - 33333) * 0.30;
-        } else if (semiMonthlyTaxableIncome <= 333333) {
-            tax = 20416.67 + (semiMonthlyTaxableIncome - 83333) * 0.32;
+        if (monthlyBasicSalary <= 10000) {
+            totalPremium = 300.00; // minimum premium is 300
+        } else if (monthlyBasicSalary < 60000) {
+            totalPremium = monthlyBasicSalary * 0.03; // 3% of the basic salary
         } else {
-            tax = 100416.67 + (semiMonthlyTaxableIncome - 333333) * 0.35;
+            totalPremium = 1800.00; // maximum premium is 1,800
         }
 
-        return tax;
+        // divide by 2 because the employee only shoulders half of the total premium
+        return totalPremium / 2;
+    }
+
+    // this method computes the Pag-IBIG contribution for the employee
+    static double computePagIbig(double monthlyBasicSalary) {
+        double contribution = monthlyBasicSalary * 0.02;
+
+        if (contribution > 100) {
+            contribution = 100;
+        }
+
+        return contribution;
+    }
+
+    // this method computes the withholding tax using the BIR monthly tax table
+    static double computeWithholdingTax(double monthlyTaxableIncome) {
+        if (monthlyTaxableIncome <= 20832) {
+            return 0;
+        } else if (monthlyTaxableIncome < 33333) {
+            return (monthlyTaxableIncome - 20833) * 0.20;
+        } else if (monthlyTaxableIncome < 66667) {
+            return 2500 + (monthlyTaxableIncome - 33333) * 0.25;
+        } else if (monthlyTaxableIncome < 166667) {
+            return 10833 + (monthlyTaxableIncome - 66667) * 0.30;
+        } else if (monthlyTaxableIncome < 666667) {
+            return 40833.33 + (monthlyTaxableIncome - 166667) * 0.32;
+        } else {
+            return 200833.33 + (monthlyTaxableIncome - 666667) * 0.35;
+        }
     }
 
     // this method prints the full payroll report for all employees from June to December
     static void printFullPayroll() {
 
-        // we use this array so we can convert the month number to a name like "June"
         String[] monthNames = {"", "January", "February", "March", "April", "May", "June",
             "July", "August", "September", "October", "November", "December"};
 
-        // these are the months we need to show (6 = June, 12 = December)
         int[] months = {6, 7, 8, 9, 10, 11, 12};
 
         System.out.println("=======================================================================");
@@ -406,13 +392,12 @@ public class MotorPHPayrollSystem {
         // loop through each employee one by one
         for (int e = 0; e < empCount; e++) {
 
-            // put the first name and last name together
             String fullName = empFirstNames[e] + " " + empLastNames[e];
 
             // print the employee's basic info at the top
             System.out.println("\n-----------------------------------------------------------------------");
             System.out.printf("  EMPLOYEE #%d: %s%n", empNumbers[e], fullName);
-            System.out.printf("  Birthday: %s | Basic Salary: PHP %-12.6f | Hourly Rate: PHP %-12.6f%n",
+            System.out.printf("  Birthday: %s | Basic Salary: PHP %s | Hourly Rate: PHP %s%n",
                     empBirthdays[e], empBasicSalary[e], empHourlyRate[e]);
             System.out.println("-----------------------------------------------------------------------");
 
@@ -433,10 +418,10 @@ public class MotorPHPayrollSystem {
             System.out.println();
 
             // print the payroll table header
-            System.out.printf("  %-16s %-8s %-14s %-20s %-18s %-18s %-16s %-16s%n",
-                    "Period", "Cutoff", "Hrs Worked", "Gross Pay", "SSS", "PhilHealth",
-                    "Pag-IBIG", "Net Pay");
-            System.out.println("  " + "-".repeat(126));
+            System.out.printf("  %-16s %-8s %-15s %-20s %-15s %-15s %-15s %-15s %-20s%n",
+                    "Period", "Cutoff", "Hrs Worked", "Gross Pay",
+                    "SSS", "PhilHealth", "Pag-IBIG", "Tax", "Net Pay");
+            System.out.println("  " + "-".repeat(140));
 
             // now loop through each month from June to December
             for (int month : months) {
@@ -456,67 +441,63 @@ public class MotorPHPayrollSystem {
                 double hours1 = getTotalHoursForPeriod(empNumbers[e], cut1Start, cut1End);
                 double hours2 = getTotalHoursForPeriod(empNumbers[e], cut2Start, cut2End);
 
-                // compute gross pay = (hours worked x hourly rate) + half of the monthly allowances
-                // we divide allowances by 2 because they are split between the two cutoffs
+                // gross pay = hours worked times hourly rate, plus half of the monthly allowances
+                // split the allowances in half because they are given across both cutoffs
                 double allowancesHalf = (empRiceSubsidy[e] + empPhoneAllowance[e] + empClothingAllowance[e]) / 2;
-                double grossPay1 = (hours1 * empHourlyRate[e]) + allowancesHalf;
-                double grossPay2 = (hours2 * empHourlyRate[e]) + allowancesHalf;
+                double workPay1 = hours1 * empHourlyRate[e];
+                double workPay2 = hours2 * empHourlyRate[e];
 
-                // add both cutoffs together to get the total monthly gross
-                // our instructor said we have to combine them first before computing deductions
+                double grossPay1 = workPay1 + allowancesHalf;
+                double grossPay2 = workPay2 + allowancesHalf;
+
+                // add both cutoffs together to get the total gross for the whole month
                 double monthlyGross = grossPay1 + grossPay2;
 
-                // compute the government deductions using the monthly gross
-                double sssMonthly = computeSSS(monthlyGross);
-                double philHealthMonthly = computePhilHealth(monthlyGross);
-                double pagIbigMonthly = computePagIbig(monthlyGross);
+                // compute all three mandatory government deductions using the basic salary
+                double sssMonthly = computeSSS(empBasicSalary[e]);
+                double philHealthEmployee = computePhilHealth(empBasicSalary[e]);
+                double pagIbigMonthly = computePagIbig(empBasicSalary[e]);
 
-                // add up all three mandatory deductions
-                double mandatoryDeductions = sssMonthly + philHealthMonthly + pagIbigMonthly;
+                // add up SSS + PhilHealth + Pag-IBIG to get the total mandatory deductions
+                double mandatoryDeductions = sssMonthly + philHealthEmployee + pagIbigMonthly;
 
-                // compute the taxable income per cutoff for the income tax computation
-                double semiMonthlyTaxable = (monthlyGross - mandatoryDeductions) / 2;
+                // taxable income is the total work pay minus the mandatory deductions
+                // allowances are non-taxable so they are excluded
+                double monthlyTaxableIncome = (workPay1 + workPay2) - mandatoryDeductions;
+                double withholdingTax = computeWithholdingTax(monthlyTaxableIncome);
 
-                // compute the income tax per cutoff
-                double incomeTaxPerCutoff = computeIncomeTax(semiMonthlyTaxable);
+                double totalDeductions2nd = mandatoryDeductions + withholdingTax;
 
-                // divide the monthly deductions by 2 so we can show them per cutoff
-                double sssCutoff = sssMonthly / 2;
-                double philHealthCutoff = philHealthMonthly / 2;
-                double pagIbigCutoff = pagIbigMonthly / 2;
+                double netPay1 = grossPay1; // no deductions yet for the 1st cutoff
+                double netPay2 = grossPay2 - totalDeductions2nd; // all deductions come out here
 
-                // total deductions per cutoff = half of SSS + half of PhilHealth + half of PagIbig + income tax
-                double totalDeductionsPerCutoff = sssCutoff + philHealthCutoff + pagIbigCutoff + incomeTaxPerCutoff;
-
-                // net pay = gross pay minus total deductions
-                double netPay1 = grossPay1 - totalDeductionsPerCutoff;
-                double netPay2 = grossPay2 - totalDeductionsPerCutoff;
-
-                // make the month label like "June 2024"
+                // create the label for this month like "June 2024"
                 String monthLabel = monthNames[month] + " " + year;
 
                 // print the 1st cutoff row
-                System.out.printf("  %-16s %-8s %-14.6f %-20.6f %-18.6f %-18.6f %-16.6f %-16.6f%n",
+                System.out.printf("  %-16s %-8s %-15s %-20s %-15s %-15s %-15s %-15s %-20s%n",
                         monthLabel, "1st",
                         hours1, grossPay1,
-                        sssCutoff, philHealthCutoff,
-                        pagIbigCutoff, netPay1);
+                        "-", "-", "-", "-",
+                        netPay1);
 
-                // print the 2nd cutoff row
-                System.out.printf("  %-16s %-8s %-14.6f %-20.6f %-18.6f %-18.6f %-16.6f %-16.6f%n",
+                // print the 2nd cutoff row that shows all the deductions
+                System.out.printf("  %-16s %-8s %-15s %-20s %-15s %-15s %-15s %-15s %-20s%n",
                         "", "2nd",
                         hours2, grossPay2,
-                        sssCutoff, philHealthCutoff,
-                        pagIbigCutoff, netPay2);
+                        sssMonthly, philHealthEmployee,
+                        pagIbigMonthly, withholdingTax,
+                        netPay2);
 
                 // print the total row for the whole month
-                System.out.printf("  %-16s %-8s %-14.6f %-20.6f %-18.6f %-18.6f %-16.6f %-16.6f%n",
+                System.out.printf("  %-16s %-8s %-15s %-20s %-15s %-15s %-15s %-15s %-20s%n",
                         "", "TOTAL",
                         hours1 + hours2, monthlyGross,
-                        sssMonthly, philHealthMonthly,
-                        pagIbigMonthly, netPay1 + netPay2);
+                        sssMonthly, philHealthEmployee,
+                        pagIbigMonthly, withholdingTax,
+                        netPay1 + netPay2);
 
-                System.out.println("  " + "-".repeat(126));
+                System.out.println("  " + "-".repeat(140));
             }
         }
 
@@ -525,9 +506,7 @@ public class MotorPHPayrollSystem {
         System.out.println("=======================================================================");
     }
 
-    // this method splits one line of CSV into separate values
-    // we need this because some values have commas inside quotes like "90,000"
-    // so we can't just split by comma directly
+    // this method handles splitting a CSV line into individual values
     static String[] splitCSVLine(String line) {
         ArrayList<String> fields = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -537,26 +516,24 @@ public class MotorPHPayrollSystem {
             char c = line.charAt(i);
 
             if (c == '"') {
-                inQuotes = !inQuotes; // flip the inQuotes flag when we see a quote mark
+                inQuotes = !inQuotes;
             } else if (c == ',' && !inQuotes) {
-                fields.add(current.toString()); // comma outside quotes means end of a value
-                current = new StringBuilder();
+                fields.add(current.toString());
+                current = new StringBuilder(); // reset for the next value
             } else {
-                current.append(c); // otherwise just add the character to the current value
+                current.append(c);
             }
         }
-        fields.add(current.toString()); // don't forget to add the last value
+        fields.add(current.toString());
 
         return fields.toArray(new String[0]);
     }
 
-    // this method converts a number like "90,000" into a regular double like 90000.0
-    // we need this because the CSV file has commas inside numbers
+    // this method converts a string like "90,000" into an actual number like 90000.0
     static double parseFormattedDouble(String raw) {
-        String clean = raw.trim().replace("\"", "").replace(",", ""); // remove quotes and commas
+        String clean = raw.trim().replace("\"", "").replace(",", ""); // remove any quotes and commas
         if (clean.isEmpty()) {
-            return 0; // if there is nothing there, just return 0
-
+            return 0; // if the value is missing or blank just return 0
         }
         return Double.parseDouble(clean);
     }
