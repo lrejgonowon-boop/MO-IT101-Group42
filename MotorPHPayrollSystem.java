@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Scanner;
 
 public class MotorPHPayrollSystem {
 
@@ -36,16 +37,77 @@ public class MotorPHPayrollSystem {
     // this is the main method, it runs first when we start the program
     public static void main(String[] args) {
 
-        // first we read the employee details from the CSV
-        readEmployeeDetails("MotorPH_Employee Data(Employee Details).csv");
+    Scanner input = new Scanner(System.in);
 
-        // then we read the attendance records from the CSV
-        readAttendanceRecords("MotorPH_Employee Data(Attendance Record).csv");
+    System.out.println("=================================");
+    System.out.println("     MOTORPH PAYROLL SYSTEM");
+    System.out.println("=================================");
 
-        // finally we compute and print the payroll for June to December
-        printFullPayroll();
+    System.out.print("Username: ");
+    String username = input.nextLine();
+
+    System.out.print("Password: ");
+    String password = input.nextLine();
+
+    if (!username.equals("payroll_staff") || !password.equals("12345")) {
+        System.out.println("\nIncorrect username and/or password.");
+        return;
     }
 
+    System.out.println("\nLogin successful!\n");
+
+    readEmployeeDetails("MotorPH_Employee Data(Employee Details).csv");
+    readAttendanceRecords("MotorPH_Employee Data(Attendance Record).csv");
+
+
+System.out.println("=========== MAIN MENU ===========");
+System.out.println("1. Process Payroll");
+System.out.println("2. Exit Program");
+
+System.out.print("Enter choice: ");
+int choice = input.nextInt();
+
+if (choice == 1) {
+
+    // We'll add the Process Payroll menu in Step 3.
+    System.out.println("\n=========== PROCESS PAYROLL ===========");
+System.out.println("1. One Employee");
+System.out.println("2. All Employees");
+System.out.println("3. Exit Program");
+
+System.out.print("Enter choice: ");
+int payrollChoice = input.nextInt();
+
+if (payrollChoice == 1) {
+
+    System.out.print("\nEnter Employee Number: ");
+int employeeNumber = input.nextInt();
+
+printFullPayroll(employeeNumber);
+
+} else if (payrollChoice == 2) {
+printFullPayroll(0);
+    
+
+} else if (payrollChoice == 3) {
+
+    System.out.println("\nProgram terminated.");
+
+} else {
+
+    System.out.println("\nInvalid choice.");
+
+}
+
+} else if (choice == 2) {
+
+    System.out.println("\nProgram terminated.");
+
+} else {
+
+    System.out.println("\nInvalid choice.");
+}
+    }
     // this method opens the employee details CSV and saves the data into our arrays
     static void readEmployeeDetails(String fileName) {
 
@@ -378,7 +440,9 @@ public class MotorPHPayrollSystem {
     }
 
     // this method prints the full payroll report for all employees from June to December
-    static void printFullPayroll() {
+    static void printFullPayroll(int employeeNumber) {
+
+        boolean employeeExists = false;
 
         String[] monthNames = {"", "January", "February", "March", "April", "May", "June",
             "July", "August", "September", "October", "November", "December"};
@@ -391,7 +455,10 @@ public class MotorPHPayrollSystem {
 
         // loop through each employee one by one
         for (int e = 0; e < empCount; e++) {
-
+if (employeeNumber != 0 && empNumbers[e] != employeeNumber) {
+    continue;
+}
+employeeExists = true;
             String fullName = empFirstNames[e] + " " + empLastNames[e];
 
             // print the employee's basic info at the top
@@ -417,11 +484,10 @@ public class MotorPHPayrollSystem {
             System.out.println("  " + "-".repeat(34));
             System.out.println();
 
-            // print the payroll table header
-            System.out.printf("  %-16s %-8s %-15s %-20s %-15s %-15s %-15s %-15s %-20s%n",
-                    "Period", "Cutoff", "Hrs Worked", "Gross Pay",
-                    "SSS", "PhilHealth", "Pag-IBIG", "Tax", "Net Pay");
-            System.out.println("  " + "-".repeat(140));
+            
+            //System.out.printf("  %-16s %-8s %-15s %-20s %-15s %-15s %-15s %-15s %-20s%n",
+                    
+            //System.out.println("  " + "-".repeat(140));
 
             // now loop through each month from June to December
             for (int month : months) {
@@ -446,9 +512,9 @@ public class MotorPHPayrollSystem {
                 double allowancesHalf = (empRiceSubsidy[e] + empPhoneAllowance[e] + empClothingAllowance[e]) / 2;
                 double workPay1 = hours1 * empHourlyRate[e];
                 double workPay2 = hours2 * empHourlyRate[e];
-
-                double grossPay1 = workPay1 + allowancesHalf;
-                double grossPay2 = workPay2 + allowancesHalf;
+//Assignment Requirement: Do not add allowances
+                double grossPay1 = workPay1;
+                double grossPay2 = workPay2;
 
                 // add both cutoffs together to get the total gross for the whole month
                 double monthlyGross = grossPay1 + grossPay2;
@@ -475,28 +541,29 @@ public class MotorPHPayrollSystem {
                 String monthLabel = monthNames[month] + " " + year;
 
                 // print the 1st cutoff row
-                System.out.printf("  %-16s %-8s %-15s %-20s %-15s %-15s %-15s %-15s %-20s%n",
-                        monthLabel, "1st",
-                        hours1, grossPay1,
-                        "-", "-", "-", "-",
-                        netPay1);
+                System.out.println();
 
-                // print the 2nd cutoff row that shows all the deductions
-                System.out.printf("  %-16s %-8s %-15s %-20s %-15s %-15s %-15s %-15s %-20s%n",
-                        "", "2nd",
-                        hours2, grossPay2,
-                        sssMonthly, philHealthEmployee,
-                        pagIbigMonthly, withholdingTax,
-                        netPay2);
+System.out.println("Cutoff Date: " + monthNames[month] + " 1 to 15");
+System.out.printf("Total Hours Worked: %.2f%n", hours1);
+System.out.printf("Gross Salary: PHP %.2f%n", grossPay1);
+System.out.printf("Net Salary: PHP %.2f%n", netPay1);
 
-                // print the total row for the whole month
-                System.out.printf("  %-16s %-8s %-15s %-20s %-15s %-15s %-15s %-15s %-20s%n",
-                        "", "TOTAL",
-                        hours1 + hours2, monthlyGross,
-                        sssMonthly, philHealthEmployee,
-                        pagIbigMonthly, withholdingTax,
-                        netPay1 + netPay2);
+System.out.println();
 
+int lastDay = LocalDate.of(year, month, 1).lengthOfMonth();
+
+System.out.println("Cutoff Date: " + monthNames[month] + " 16 to " + lastDay);
+System.out.printf("Total Hours Worked: %.2f%n", hours2);
+System.out.printf("Gross Salary: PHP %.2f%n", grossPay2);
+
+System.out.printf("SSS: PHP %.2f%n", sssMonthly);
+System.out.printf("PhilHealth: PHP %.2f%n", philHealthEmployee);
+System.out.printf("Pag-IBIG: PHP %.2f%n", pagIbigMonthly);
+System.out.printf("Tax: PHP %.2f%n", withholdingTax);
+System.out.printf("Total Deductions: PHP %.2f%n", totalDeductions2nd);
+System.out.printf("Net Salary: PHP %.2f%n", netPay2);
+
+System.out.println("---------------------------------------------------");
                 System.out.println("  " + "-".repeat(140));
             }
         }
@@ -504,6 +571,9 @@ public class MotorPHPayrollSystem {
         System.out.println("\n=======================================================================");
         System.out.println("                          END OF PAYROLL REPORT");
         System.out.println("=======================================================================");
+        if (employeeNumber != 0 && !employeeExists) {
+    System.out.println("\nEmployee number does not exist.");
+}
     }
 
     // this method handles splitting a CSV line into individual values
